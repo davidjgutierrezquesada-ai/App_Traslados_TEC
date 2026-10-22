@@ -30,9 +30,18 @@ st.set_page_config(
     layout="wide"
 )
 
+# --- RECEPTOR DE DATOS DE LA APP DE PRE-REGISTRO ---
+params = st.query_params
+url_cedula = params.get("cedula", "")
+url_categoria = params.get("categoria", "") # Recibe "Mayor de edad" o "Menor de edad"
+
 # 2. --- MEMORIA DE NAVEGACIÓN Y VARIABLES ---
 if 'pantalla_actual' not in st.session_state:
-    st.session_state.pantalla_actual = 'Inicio'
+    # ENRUTAMIENTO INTELIGENTE: Si detecta cédula, salta directo al Registro
+    if url_cedula:
+        st.session_state.pantalla_actual = 'Registro'
+    else:
+        st.session_state.pantalla_actual = 'Inicio'
 
 if 'hora_alerta_guardada' not in st.session_state:
     st.session_state.hora_alerta_guardada = None
@@ -69,6 +78,9 @@ elif st.session_state.pantalla_actual == 'Registro':
     hoy = datetime.datetime.now().strftime("%Y-%m-%d")
     st.caption(f"Fecha: {hoy} | ID Evento: Generación Automática")
     
+    if url_cedula:
+        st.success("⚡ Cédula y categoría de edad sincronizadas automáticamente desde Pre-Registro.")
+    
     st.write("") 
 
     # DATOS DEL PACIENTE CON CÉDULA
@@ -76,9 +88,19 @@ elif st.session_state.pantalla_actual == 'Registro':
         st.subheader("📋 Datos del Paciente")
         col_ced, col_cat, col_prio = st.columns(3)
         with col_ced:
-            cedula = st.text_input("Número de Cédula", placeholder="Ej. 101230456")
+            # AUTOCOMPLETADO DE CÉDULA
+            cedula = st.text_input("Número de Cédula", value=url_cedula, placeholder="Ej. 101230456")
         with col_cat:
-            cat_edad = st.selectbox("Categoría (Edad)", ["Mayor de edad", "Menor de edad"])
+            # AUTOCOMPLETADO INTELIGENTE DE CATEGORÍA DE EDAD
+            opciones_edad = ["Mayor de edad", "Menor de edad"]
+            
+            # Si la URL trae la categoría exacta, la seleccionamos; si no, por defecto la primera (Mayor)
+            indice_edad = 0
+            if url_categoria in opciones_edad:
+                indice_edad = opciones_edad.index(url_categoria)
+                
+            cat_edad = st.selectbox("Categoría (Edad)", opciones_edad, index=indice_edad)
+            
         with col_prio:
             cod_prioridad = st.selectbox("Código Prioridad", ["Verde", "Amarillo", "Rojo"])
     
@@ -179,6 +201,9 @@ elif st.session_state.pantalla_actual == 'Registro':
                 st.session_state.hora_arribo_guardada = None
                 st.session_state.hora_salida_guardada = None
                 
+                # Limpiar los parámetros de la URL para evitar recargas repetidas
+                st.query_params.clear()
+                
                 st.balloons()
                 st.success(f"¡Paciente {cedula} guardado exitosamente bajo la prioridad {cod_prioridad}!")
                 time.sleep(3) 
@@ -193,7 +218,6 @@ elif st.session_state.pantalla_actual == 'Registro':
 elif st.session_state.pantalla_actual == 'Dashboard':
     st.title("Dashboard de Indicadores (KPIs)")
     
-    # Botón de Descarga
     try:
         with open('Dashboard_Control_Tiempos.xlsx', 'rb') as f:
             st.download_button(
@@ -213,7 +237,6 @@ elif st.session_state.pantalla_actual == 'Dashboard':
         df = df.dropna(subset=['ID Evento'])
         df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce')
         
-        # --- SEGURIDAD: SI LA COLUMNA CÉDULA NO EXISTE EN REGISTROS ANTIGUOS, LA CREAMOS ---
         if 'Cédula' not in df.columns:
             df['Cédula'] = "N/D"
         else:
@@ -226,18 +249,16 @@ elif st.session_state.pantalla_actual == 'Dashboard':
         df_mes = df[df['Fecha'].dt.month == mes_actual]
         promedio_mes = df_mes['Tiempo Espera (min)'].mean() if not df_mes.empty else 0.0
         
-        # Diagnóstico Rápido Textual
         st.subheader("💡 Diagnóstico Rápido")
         if promedio_historico < 20:
-            st.success(f"**🟢 ESTADO ÓPTIMO:** El tiempo promedio de espera general es de {promedio_historico:.1f} minutos. El flujo de pacientes es muy eficiente y está dentro de lo esperado.")
+            st.success(f"**🟢 ESTADO ÓPTIMO:** El tiempo promedio de espera general es de {promedio_historico:.1f} minutos.")
         elif 20 <= promedio_historico <= 30:
-            st.info(f"**🟡 ESTADO ACEPTABLE:** El tiempo promedio de espera es de {promedio_historico:.1f} minutos. El sistema funciona con normalidad, pero hay margen para agilizar los tiempos de arribo.")
+            st.info(f"**🟡 ESTADO ACEPTABLE:** El tiempo promedio de espera es de {promedio_historico:.1f} minutos.")
         else:
-            st.error(f"**🔴 ALERTA DE DEMORA:** Los tiempos de espera están muy altos ({promedio_historico:.1f} minutos en promedio). Se sugiere una revisión urgente en la logística de las ambulancias/camillas.")
+            st.error(f"**🔴 ALERTA DE DEMORA:** Los tiempos de espera están muy altos ({promedio_historico:.1f} minutos).")
             
         st.write("---")
         
-        # Tarjetas KPIs
         kpi1, kpi2, kpi3 = st.columns(3)
         with kpi1:
             with st.container(border=True): 
@@ -251,19 +272,17 @@ elif st.session_state.pantalla_actual == 'Dashboard':
                 
         st.write("---") 
         
-        # Auditoría de Cuellos de Botella
         st.subheader("⚠️ Auditoría de Cuellos de Botella (Tiempos Críticos)")
         df_criticos = df[df['Tiempo Espera (min)'] > 30] 
         if not df_criticos.empty:
-            st.warning(f"Se han detectado {len(df_criticos)} traslados que excedieron el tiempo de espera aceptable (>30 min).")
+            st.warning(f"Se han detectado {len(df_criticos)} traslados que excedieron el tiempo aceptable (>30 min).")
             columnas_mostrar = ['ID Evento', 'Cédula', 'Fecha', 'Código Prioridad', 'Tiempo Espera (min)', 'Tiempo Total']
             st.dataframe(df_criticos[columnas_mostrar].sort_values(by='Tiempo Espera (min)', ascending=False), use_container_width=True)
         else:
-            st.success("¡Excelente! No hay traslados críticos recientes que superen los 30 minutos de espera.")
+            st.success("¡Excelente! No hay traslados críticos recientes que superen los 30 minutos.")
             
         st.write("---")
         
-        # Gráficos
         graf_izq, graf_der = st.columns([6, 4])
         
         with graf_izq:
@@ -278,9 +297,8 @@ elif st.session_state.pantalla_actual == 'Dashboard':
                 df_prioridad = df['Código Prioridad'].value_counts()
                 st.bar_chart(df_prioridad)
 
-        # Tabla de Útimos Movimientos
         st.write("---")
-        st.subheader("🕒 Últimos 5 Traslados Registrados")
+        st.subheader("🕒 Útimos 5 Traslados Registrados")
         df_recientes = df.tail(5)[['ID Evento', 'Cédula', 'Código Prioridad', 'Tiempo Total']].iloc[::-1]
         st.dataframe(df_recientes, use_container_width=True)
 
