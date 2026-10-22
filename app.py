@@ -249,6 +249,8 @@ elif st.session_state.pantalla_actual == 'Registro':
 
 elif st.session_state.pantalla_actual == 'Dashboard':
     st.title("Dashboard de Indicadores (KPIs - Nube)")
+    st.link_button("📊 Abrir Base de Datos Central (Google Sheets)", url=https://docs.google.com/spreadsheets/d/1UAWXhHxnvRpGMfnfvSDizyfsdi0Dd7r10LyEzuSmMz4/edit?usp=sharing)
+
     
     try:
         df = cargar_datos_traslados()
