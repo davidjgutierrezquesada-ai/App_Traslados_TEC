@@ -4,7 +4,6 @@ import datetime
 import time 
 from openpyxl import load_workbook 
 
-# --- FUNCIÓN MATEMÁTICA ROBUSTA ---
 def calcular_minutos(hora_inicio, hora_fin):
     if isinstance(hora_inicio, datetime.time): hora_inicio = hora_inicio.strftime("%H:%M")
     if isinstance(hora_fin, datetime.time): hora_fin = hora_fin.strftime("%H:%M")
@@ -23,21 +22,17 @@ def calcular_minutos(hora_inicio, hora_fin):
     except:
         return None 
 
-# 1. Configuración principal de la página
 st.set_page_config(
     page_title="App Traslados TEC",
     page_icon="🚑",
     layout="wide"
 )
 
-# --- RECEPTOR DE DATOS DE LA APP DE PRE-REGISTRO ---
 params = st.query_params
 url_cedula = params.get("cedula", "")
-url_categoria = params.get("categoria", "") # Recibe "Mayor de edad" o "Menor de edad"
+url_categoria = params.get("categoria", "")
 
-# 2. --- MEMORIA DE NAVEGACIÓN Y VARIABLES ---
 if 'pantalla_actual' not in st.session_state:
-    # ENRUTAMIENTO INTELIGENTE: Si detecta cédula, salta directo al Registro
     if url_cedula:
         st.session_state.pantalla_actual = 'Registro'
     else:
@@ -50,7 +45,6 @@ if 'hora_arribo_guardada' not in st.session_state:
 if 'hora_salida_guardada' not in st.session_state:
     st.session_state.hora_salida_guardada = None
 
-# 3. --- MENÚ LATERAL (SIDEBAR) ---
 with st.sidebar:
     st.header("Clínica TEC")
     st.divider()
@@ -64,15 +58,11 @@ with st.sidebar:
     if st.button("Dashboard de KPIs", use_container_width=True):
         st.session_state.pantalla_actual = 'Dashboard'
 
-# 4. --- ÁREA PRINCIPAL ---
-
-# Pantalla 1: INICIO
 if st.session_state.pantalla_actual == 'Inicio':
     st.title("Sistema de Control de Traslados")
     st.subheader("Clínica TEC - Módulo de Auditoría de Tiempos")
     st.info("👈 Selecciona una opción en el menú lateral para comenzar.")
 
-# Pantalla 2: REGISTRO
 elif st.session_state.pantalla_actual == 'Registro':
     st.title("Nuevo Registro de Traslado")
     hoy = datetime.datetime.now().strftime("%Y-%m-%d")
@@ -83,24 +73,17 @@ elif st.session_state.pantalla_actual == 'Registro':
     
     st.write("") 
 
-    # DATOS DEL PACIENTE CON CÉDULA
     with st.container(border=True):
         st.subheader("📋 Datos del Paciente")
         col_ced, col_cat, col_prio = st.columns(3)
         with col_ced:
-            # AUTOCOMPLETADO DE CÉDULA
             cedula = st.text_input("Número de Cédula", value=url_cedula, placeholder="Ej. 101230456")
         with col_cat:
-            # AUTOCOMPLETADO INTELIGENTE DE CATEGORÍA DE EDAD
             opciones_edad = ["Mayor de edad", "Menor de edad"]
-            
-            # Si la URL trae la categoría exacta, la seleccionamos; si no, por defecto la primera (Mayor)
             indice_edad = 0
             if url_categoria in opciones_edad:
                 indice_edad = opciones_edad.index(url_categoria)
-                
             cat_edad = st.selectbox("Categoría (Edad)", opciones_edad, index=indice_edad)
-            
         with col_prio:
             cod_prioridad = st.selectbox("Código Prioridad", ["Verde", "Amarillo", "Rojo"])
     
@@ -143,6 +126,21 @@ elif st.session_state.pantalla_actual == 'Registro':
 
     st.write("") 
     
+    # --- NUEVO: CAPTURA DIFERIDA (Se activa solo cuando la ambulancia va en camino y ya se capturaron las 3 horas) ---
+    motivo_traslado = "N/D"
+    lugar_origen = "N/D"
+    
+    if st.session_state.hora_alerta_guardada and st.session_state.hora_arribo_guardada and st.session_state.hora_salida_guardada:
+        with st.container(border=True):
+            st.info("🚑 **Ambulancia en camino:** Puede completar la información complementaria con calma mientras finaliza el proceso.")
+            col_m1, col_m2 = st.columns(2)
+            with col_m1:
+                motivo_traslado = st.text_input("Motivo Clínico del Traslado (Manual):", placeholder="Ej. Lesión deportiva, crisis asmática...")
+            with col_m2:
+                lugar_origen = st.text_input("Lugar de Origen en el Campus (Manual):", placeholder="Ej. Gimnasio, Talleres, Comedor...")
+
+    st.write("")
+
     if st.button("Guardar y Finalizar Registro", type="primary", use_container_width=True):
         if st.session_state.hora_alerta_guardada and st.session_state.hora_arribo_guardada and st.session_state.hora_salida_guardada and cedula:
             try:
@@ -150,7 +148,6 @@ elif st.session_state.pantalla_actual == 'Registro':
                 wb = load_workbook(nombre_archivo)
                 ws = wb.active
                 
-                # Auditor Automático (Backfill)
                 for fila in range(3, ws.max_row + 1):
                     alerta = ws.cell(row=fila, column=5).value
                     arribo = ws.cell(row=fila, column=6).value
@@ -166,7 +163,6 @@ elif st.session_state.pantalla_actual == 'Registro':
                             ws.cell(row=fila, column=9).value = calc_extraccion
                             ws.cell(row=fila, column=10).value = calc_total
 
-                # Ingreso de nuevo paciente
                 fila_vacia = ws.max_row + 1
                 for fila in range(3, ws.max_row + 2):
                     if ws.cell(row=fila, column=1).value is None:
@@ -180,9 +176,15 @@ elif st.session_state.pantalla_actual == 'Registro':
                 else:
                     nuevo_id = "TR-1001"
                 
-                # Escritura en Excel
+                # Escritura de cabeceras extendidas y valores en Excel
                 ws.cell(row=2, column=11).value = "Cédula"
+                ws.cell(row=2, column=12).value = "Motivo Traslado"
+                ws.cell(row=2, column=13).value = "Lugar Origen"
+                
                 ws.cell(row=fila_vacia, column=11).value = cedula 
+                ws.cell(row=fila_vacia, column=12).value = motivo_traslado
+                ws.cell(row=fila_vacia, column=13).value = lugar_origen
+                
                 ws.cell(row=fila_vacia, column=1).value = nuevo_id 
                 ws.cell(row=fila_vacia, column=2).value = hoy      
                 ws.cell(row=fila_vacia, column=3).value = cat_edad       
@@ -201,11 +203,10 @@ elif st.session_state.pantalla_actual == 'Registro':
                 st.session_state.hora_arribo_guardada = None
                 st.session_state.hora_salida_guardada = None
                 
-                # Limpiar los parámetros de la URL para evitar recargas repetidas
                 st.query_params.clear()
                 
                 st.balloons()
-                st.success(f"¡Paciente {cedula} guardado exitosamente bajo la prioridad {cod_prioridad}!")
+                st.success(f"¡Paciente {cedula} guardado exitosamente con auditoría completada!")
                 time.sleep(3) 
                 st.rerun()
                 
@@ -214,7 +215,6 @@ elif st.session_state.pantalla_actual == 'Registro':
         else:
             st.warning("⚠️ Por favor captura el número de cédula y las tres horas antes de guardar el registro.")
 
-# Pantalla 3: DASHBOARD MEJORADO Y CORREGIDO
 elif st.session_state.pantalla_actual == 'Dashboard':
     st.title("Dashboard de Indicadores (KPIs)")
     
