@@ -5,7 +5,6 @@ import time
 import gspread
 from google.oauth2.service_account import Credentials
 
-# --- FUNCIÓN MATEMÁTICA ROBUSTA ---
 def calcular_minutos(hora_inicio, hora_fin):
     if isinstance(hora_inicio, datetime.time): hora_inicio = hora_inicio.strftime("%H:%M")
     if isinstance(hora_fin, datetime.time): hora_fin = hora_fin.strftime("%H:%M")
@@ -24,14 +23,12 @@ def calcular_minutos(hora_inicio, hora_fin):
     except:
         return None 
 
-# 1. Configuración principal de la página
 st.set_page_config(
     page_title="App Traslados TEC",
     page_icon="🚑",
     layout="wide"
 )
 
-# --- CONEXIÓN A GOOGLE SHEETS DIRECTA ---
 def conectar_gsheets():
     scope = [
         "https://www.googleapis.com/auth/spreadsheets",
@@ -75,12 +72,10 @@ def guardar_datos_traslados(df):
     except Exception as e:
         st.error(f"Error al sincronizar traslados con la nube: {e}")
 
-# --- RECEPTOR DE DATOS DE LA APP DE PRE-REGISTRO ---
 params = st.query_params
 url_cedula = params.get("cedula", "")
 url_categoria = params.get("categoria", "")
 
-# 2. --- MEMORIA DE NAVEGACIÓN Y VARIABLES ---
 if 'pantalla_actual' not in st.session_state:
     if url_cedula:
         st.session_state.pantalla_actual = 'Registro'
@@ -94,7 +89,6 @@ if 'hora_arribo_guardada' not in st.session_state:
 if 'hora_salida_guardada' not in st.session_state:
     st.session_state.hora_salida_guardada = None
 
-# 3. --- MENÚ LATERAL (SIDEBAR) ---
 with st.sidebar:
     st.header("Clínica TEC")
     st.divider()
@@ -108,15 +102,13 @@ with st.sidebar:
     if st.button("Dashboard de KPIs", use_container_width=True):
         st.session_state.pantalla_actual = 'Dashboard'
 
-# 4. --- ÁREA PRINCIPAL ---
 
-# Pantalla 1: INICIO
 if st.session_state.pantalla_actual == 'Inicio':
     st.title("Sistema de Control de Traslados")
     st.subheader("Clínica TEC - Módulo de Auditoría de Tiempos (Nube)")
     st.info("👈 Selecciona una opción en el menú lateral para comenzar.")
 
-# Pantalla 2: REGISTRO
+
 elif st.session_state.pantalla_actual == 'Registro':
     st.title("Nuevo Registro de Traslado")
     hoy = datetime.datetime.now().strftime("%Y-%m-%d")
@@ -127,7 +119,7 @@ elif st.session_state.pantalla_actual == 'Registro':
     
     st.write("") 
 
-    # DATOS DEL PACIENTE CON CÉDULA
+    
     with st.container(border=True):
         st.subheader("📋 Datos del Paciente")
         col_ced, col_cat, col_prio = st.columns(3)
@@ -142,7 +134,7 @@ elif st.session_state.pantalla_actual == 'Registro':
         with col_prio:
             cod_prioridad = st.selectbox("Código Prioridad", ["Verde", "Amarillo", "Rojo"])
     
-    # TARJETAS DE TIEMPO
+    
     with st.container(border=True):
         st.subheader("Toma 1: Hora de Alerta (A)")
         col1, col2 = st.columns(2)
@@ -181,7 +173,7 @@ elif st.session_state.pantalla_actual == 'Registro':
 
     st.write("") 
     
-    # CAPTURA DIFERIDA
+    
     motivo_traslado = "N/D"
     lugar_origen = "N/D"
     
@@ -201,7 +193,7 @@ elif st.session_state.pantalla_actual == 'Registro':
             try:
                 df = cargar_datos_traslados()
                 
-                # Generación de ID Evento automático
+                
                 if not df.empty and "ID Evento" in df.columns:
                     ultimo_id = df.iloc[-1]["ID Evento"]
                     if ultimo_id and "TR-" in str(ultimo_id):
@@ -212,12 +204,12 @@ elif st.session_state.pantalla_actual == 'Registro':
                 else:
                     nuevo_id = "TR-1001"
                 
-                # Cálculos de tiempos
+                
                 t_espera = calcular_minutos(st.session_state.hora_alerta_guardada, st.session_state.hora_arribo_guardada)
                 t_extraccion = calcular_minutos(st.session_state.hora_arribo_guardada, st.session_state.hora_salida_guardada)
                 t_total = calcular_minutos(st.session_state.hora_alerta_guardada, st.session_state.hora_salida_guardada)
                 
-                # Diccionario del nuevo registro
+                
                 nuevo_registro = {
                     "ID Evento": nuevo_id,
                     "Fecha": hoy,
@@ -234,7 +226,7 @@ elif st.session_state.pantalla_actual == 'Registro':
                     "Lugar Origen": lugar_origen if lugar_origen else "N/D"
                 }
                 
-                # Añadir al DataFrame y actualizar la nube
+               
                 df = pd.concat([df, pd.DataFrame([nuevo_registro])], ignore_index=True)
                 guardar_datos_traslados(df)
                 
@@ -254,7 +246,7 @@ elif st.session_state.pantalla_actual == 'Registro':
         else:
             st.warning("⚠️ Por favor captura el número de cédula y las tres horas antes de guardar el registro.")
 
-# Pantalla 3: DASHBOARD DE KPIS
+
 elif st.session_state.pantalla_actual == 'Dashboard':
     st.title("Dashboard de Indicadores (KPIs - Nube)")
     
@@ -279,7 +271,7 @@ elif st.session_state.pantalla_actual == 'Dashboard':
             df_mes = df[df['Fecha'].dt.month == mes_actual]
             promedio_mes = df_mes['Tiempo Espera (min)'].mean() if not df_mes.empty else 0.0
             
-            # Diagnóstico Rápido Textual
+            
             st.subheader("💡 Diagnóstico Rápido")
             if promedio_historico < 20:
                 st.success(f"**🟢 ESTADO ÓPTIMO:** El tiempo promedio de espera general es de {promedio_historico:.1f} minutos.")
@@ -290,7 +282,7 @@ elif st.session_state.pantalla_actual == 'Dashboard':
                 
             st.write("---")
             
-            # Tarjetas KPIs
+            
             kpi1, kpi2, kpi3 = st.columns(3)
             with kpi1:
                 with st.container(border=True): 
@@ -304,7 +296,7 @@ elif st.session_state.pantalla_actual == 'Dashboard':
                     
             st.write("---") 
             
-            # Auditoría de Cuellos de Botella
+            
             st.subheader("⚠️ Auditoría de Cuellos de Botella (Tiempos Críticos)")
             df_criticos = df[df['Tiempo Espera (min)'] > 30] 
             if not df_criticos.empty:
@@ -316,7 +308,7 @@ elif st.session_state.pantalla_actual == 'Dashboard':
                 
             st.write("---")
             
-            # Gráficos
+            
             graf_izq, graf_der = st.columns([6, 4])
             
             with graf_izq:
@@ -331,7 +323,7 @@ elif st.session_state.pantalla_actual == 'Dashboard':
                     df_prioridad = df['Código Prioridad'].value_counts()
                     st.bar_chart(df_prioridad)
 
-            # Tabla de Últimos Movimientos
+            
             st.write("---")
             st.subheader("🕒 Útimos 5 Traslados Registrados en la Nube")
             df_recientes = df.tail(5)[['ID Evento', 'Cédula', 'Código Prioridad', 'Motivo Traslado', 'Tiempo Total']].iloc[::-1]
