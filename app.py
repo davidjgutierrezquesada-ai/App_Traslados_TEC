@@ -73,18 +73,28 @@ params = st.query_params
 url_cedula = params.get("cedula", "")
 url_categoria = params.get("categoria", "")
 
+
 if 'pantalla_actual' not in st.session_state:
     if url_cedula:
         st.session_state.pantalla_actual = 'Registro'
     else:
         st.session_state.pantalla_actual = 'Inicio'
 
-if 'hora_alerta_guardada' not in st.session_state:
-    st.session_state.hora_alerta_guardada = ""
-if 'hora_arribo_guardada' not in st.session_state:
-    st.session_state.hora_arribo_guardada = ""
-if 'hora_salida_guardada' not in st.session_state:
-    st.session_state.hora_salida_guardada = ""
+if 'in_alerta' not in st.session_state:
+    st.session_state.in_alerta = ""
+if 'in_arribo' not in st.session_state:
+    st.session_state.in_arribo = ""
+if 'in_salida' not in st.session_state:
+    st.session_state.in_salida = ""
+
+def capturar_alerta():
+    st.session_state.in_alerta = datetime.datetime.now().strftime("%H:%M")
+
+def capturar_arribo():
+    st.session_state.in_arribo = datetime.datetime.now().strftime("%H:%M")
+
+def capturar_salida():
+    st.session_state.in_salida = datetime.datetime.now().strftime("%H:%M")
 
 with st.sidebar:
     st.header("Clínica TEC")
@@ -133,31 +143,25 @@ elif st.session_state.pantalla_actual == 'Registro':
         st.subheader("Toma 1: Hora de Alerta (A)")
         col1, col2 = st.columns([1, 2])
         with col1:
-            if st.button("Capturar Hora Actual", key="btn_alerta"):
-                st.session_state.hora_alerta_guardada = datetime.datetime.now().strftime("%H:%M")
-                st.rerun()
+            st.button("Capturar Hora Actual", key="btn_alerta", on_click=capturar_alerta)
         with col2:
-            hora_alerta = st.text_input("O ingrese hora manualmente (formato HH:MM):", value=st.session_state.hora_alerta_guardada, key="in_alerta")
+            hora_alerta = st.text_input("O ingrese hora manualmente (formato HH:MM):", key="in_alerta")
 
     with st.container(border=True):
         st.subheader("Toma 2: Hora de Arribo (B)")
         col1, col2 = st.columns([1, 2])
         with col1:
-            if st.button("Capturar Hora Actual", key="btn_arribo"):
-                st.session_state.hora_arribo_guardada = datetime.datetime.now().strftime("%H:%M")
-                st.rerun()
+            st.button("Capturar Hora Actual", key="btn_arribo", on_click=capturar_arribo)
         with col2:
-            hora_arribo = st.text_input("O ingrese hora manualmente (formato HH:MM):", value=st.session_state.hora_arribo_guardada, key="in_arribo")
+            hora_arribo = st.text_input("O ingrese hora manualmente (formato HH:MM):", key="in_arribo")
 
     with st.container(border=True):
         st.subheader("Toma 3: Hora de Salida (C)")
         col1, col2 = st.columns([1, 2])
         with col1:
-            if st.button("Capturar Hora Actual", key="btn_salida"):
-                st.session_state.hora_salida_guardada = datetime.datetime.now().strftime("%H:%M")
-                st.rerun()
+            st.button("Capturar Hora Actual", key="btn_salida", on_click=capturar_salida)
         with col2:
-            hora_salida = st.text_input("O ingrese hora manualmente (formato HH:MM):", value=st.session_state.hora_salida_guardada, key="in_salida")
+            hora_salida = st.text_input("O ingrese hora manualmente (formato HH:MM):", key="in_salida")
 
     st.write("") 
     
@@ -217,9 +221,10 @@ elif st.session_state.pantalla_actual == 'Registro':
                     df = pd.concat([df, pd.DataFrame([nuevo_registro])], ignore_index=True)
                     guardar_datos_traslados(df)
                     
-                    st.session_state.hora_alerta_guardada = ""
-                    st.session_state.hora_arribo_guardada = ""
-                    st.session_state.hora_salida_guardada = ""
+                    # Limpiamos las casillas para el siguiente registro
+                    st.session_state.in_alerta = ""
+                    st.session_state.in_arribo = ""
+                    st.session_state.in_salida = ""
                     
                     st.query_params.clear()
                     
