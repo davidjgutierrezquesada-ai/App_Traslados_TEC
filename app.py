@@ -1,10 +1,13 @@
 import streamlit as st
 import pandas as pd
-import datetime
+from datetime import datetime, timedelta, timezone
 import time 
 import re
 import gspread
 from google.oauth2.service_account import Credentials
+
+def obtener_hora_cr():
+    return datetime.now(timezone.utc) - timedelta(hours=6)
 
 def calcular_minutos(hora_inicio, hora_fin):
     if not hora_inicio or not hora_fin: return None
@@ -13,10 +16,10 @@ def calcular_minutos(hora_inicio, hora_fin):
     
     formato = "%H:%M"
     try:
-        t1 = datetime.datetime.strptime(hora_inicio, formato)
-        t2 = datetime.datetime.strptime(hora_fin, formato)
+        t1 = datetime.strptime(hora_inicio, formato)
+        t2 = datetime.strptime(hora_fin, formato)
         if t2 < t1:
-            t2 += datetime.timedelta(days=1)
+            t2 += timedelta(days=1)
         diferencia = t2 - t1
         return round(diferencia.total_seconds() / 60.0, 1)
     except:
@@ -93,13 +96,13 @@ if 'in_salida' not in st.session_state:
     st.session_state.in_salida = ""
 
 def capturar_alerta():
-    st.session_state.in_alerta = datetime.datetime.now().strftime("%H:%M")
+    st.session_state.in_alerta = obtener_hora_cr().strftime("%H:%M")
 
 def capturar_arribo():
-    st.session_state.in_arribo = datetime.datetime.now().strftime("%H:%M")
+    st.session_state.in_arribo = obtener_hora_cr().strftime("%H:%M")
 
 def capturar_salida():
-    st.session_state.in_salida = datetime.datetime.now().strftime("%H:%M")
+    st.session_state.in_salida = obtener_hora_cr().strftime("%H:%M")
 
 with st.sidebar:
     st.header("Clínica TEC")
@@ -121,7 +124,7 @@ if st.session_state.pantalla_actual == 'Inicio':
 
 elif st.session_state.pantalla_actual == 'Registro':
     st.title("Nuevo Registro de Traslado")
-    hoy = datetime.datetime.now().strftime("%Y-%m-%d")
+    hoy = obtener_hora_cr().strftime("%Y-%m-%d")
     st.caption(f"Fecha: {hoy} | ID Evento: Generación Automática")
     
     if url_cedula:
@@ -183,148 +186,4 @@ elif st.session_state.pantalla_actual == 'Registro':
 
     st.write("") 
     
-    if st.button("Guardar y Finalizar Registro", type="primary", use_container_width=True):
-        if hora_alerta and hora_arribo and hora_salida and cedula:
-            if not (validar_hora(hora_alerta) and validar_hora(hora_arribo) and validar_hora(hora_salida)):
-                st.error("⚠️ Error: El formato de las horas debe ser exactamente HH:MM (ejemplo: 14:30 o 09:15).")
-            else:
-                try:
-                    df = cargar_datos_traslados()
-                    
-                    if not df.empty and "ID Evento" in df.columns:
-                        ultimo_id = df.iloc[-1]["ID Evento"]
-                        if ultimo_id and "TR-" in str(ultimo_id):
-                            num = int(str(ultimo_id).split("-")[1])
-                            nuevo_id = f"TR-{num + 1}"
-                        else:
-                            nuevo_id = "TR-1001"
-                    else:
-                        nuevo_id = "TR-1001"
-                    
-                    t_espera = calcular_minutos(hora_alerta, hora_arribo)
-                    t_extraccion = calcular_minutos(hora_arribo, hora_salida)
-                    t_total = calcular_minutos(hora_alerta, hora_salida)
-                    
-                    nuevo_registro = {
-                        "ID Evento": nuevo_id,
-                        "Fecha": hoy,
-                        "Categoría (Edad)": cat_edad,
-                        "Código Prioridad": cod_prioridad,
-                        "Hora Alerta": hora_alerta.strip(),
-                        "Hora Arribo": hora_arribo.strip(),
-                        "Hora Salida": hora_salida.strip(),
-                        "Tiempo Espera (min)": t_espera,
-                        "Tiempo Extracción": t_extraccion,
-                        "Tiempo Total": t_total,
-                        "Cédula": str(cedula),
-                        "Motivo Traslado": motivo_traslado if motivo_traslado else "N/D",
-                        "Lugar Origen": lugar_origen if lugar_origen else "N/D",
-                        "Destino": destino_traslado if destino_traslado else "N/D"
-                    }
-                    
-                    df = pd.concat([df, pd.DataFrame([nuevo_registro])], ignore_index=True)
-                    guardar_datos_traslados(df)
-                    
-                    st.session_state.limpiar_campos = True
-                    
-                    st.query_params.clear()
-                    
-                    st.balloons()
-                    st.success(f"¡Paciente {cedula} guardado exitosamente en la nube bajo la prioridad {cod_prioridad}!")
-                    time.sleep(3) 
-                    st.rerun()
-                    
-                except Exception as e:
-                    st.error(f"Error al guardar en la nube: {e}")
-        else:
-            st.warning("⚠️ Faltan datos. Por favor capture las tres horas y la cédula antes de guardar.")
-
-elif st.session_state.pantalla_actual == 'Dashboard':
-    st.title("Dashboard de Indicadores (KPIs - Nube)")
-    st.link_button("📊 Abrir Base de Datos Central (Google Sheets)", url="https://docs.google.com/spreadsheets/d/1UAWXhHxnvRpGMfnfvSDizyfsdi0Dd7r10LyEzuSmMz4/edit?usp=sharing")
-    
-    try:
-        df = cargar_datos_traslados()
-        
-        if df.empty:
-            st.warning("⚠️ No hay datos de traslados registrados en la nube todavía.")
-        else:
-            df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce')
-            df['Tiempo Espera (min)'] = pd.to_numeric(df['Tiempo Espera (min)'], errors='coerce')
-            
-            if 'Cédula' not in df.columns:
-                df['Cédula'] = "N/D"
-            else:
-                df['Cédula'] = df['Cédula'].fillna("N/D")
-            
-            total_traslados = len(df)
-            promedio_historico = df['Tiempo Espera (min)'].mean()
-            
-            mes_actual = datetime.datetime.now().month
-            df_mes = df[df['Fecha'].dt.month == mes_actual]
-            promedio_mes = df_mes['Tiempo Espera (min)'].mean() if not df_mes.empty else 0.0
-            
-            st.subheader("💡 Diagnóstico Rápido")
-            if promedio_historico < 20:
-                st.success(f"**🟢 ESTADO ÓPTIMO:** El tiempo promedio de espera general es de {promedio_historico:.1f} minutos.")
-            elif 20 <= promedio_historico <= 30:
-                st.info(f"**🟡 ESTADO ACEPTABLE:** El tiempo promedio de espera es de {promedio_historico:.1f} minutos.")
-            else:
-                st.error(f"**🔴 ALERTA DE DEMORA:** Los tiempos de espera están muy altos ({promedio_historico:.1f} minutos en promedio).")
-                
-            st.write("---")
-            
-            kpi1, kpi2, kpi3 = st.columns(3)
-            with kpi1:
-                with st.container(border=True): 
-                    st.metric(label="Promedio histórico", value=f"{promedio_historico:.1f} min")
-            with kpi2:
-                with st.container(border=True): 
-                    st.metric(label="Promedio del mes", value=f"{promedio_mes:.1f} min")
-            with kpi3:
-                with st.container(border=True): 
-                    st.metric(label="Total de traslados", value=f"{total_traslados}")
-                    
-            st.write("---") 
-            
-            st.subheader("⚠️ Auditoría de Cuellos de Botella (Tiempos Críticos)")
-            df_criticos = df[df['Tiempo Espera (min)'] > 30] 
-            if not df_criticos.empty:
-                st.warning(f"Se han detectado {len(df_criticos)} traslados que excedieron el tiempo de espera aceptable (>30 min).")
-                
-                columnas_mostrar = ['ID Evento', 'Cédula', 'Fecha', 'Código Prioridad', 'Tiempo Espera (min)', 'Tiempo Total', 'Motivo Traslado']
-                if 'Destino' in df.columns:
-                    columnas_mostrar.append('Destino')
-                    
-                st.dataframe(df_criticos[columnas_mostrar].sort_values(by='Tiempo Espera (min)', ascending=False), use_container_width=True)
-            else:
-                st.success("¡Excelente! No hay traslados críticos recientes que superen los 30 minutos de espera.")
-                
-            st.write("---")
-          
-            graf_izq, graf_der = st.columns([6, 4])
-            
-            with graf_izq:
-                with st.container(border=True): 
-                    st.subheader("Tendencia: Tiempos de Espera (min)")
-                    df_tendencia = df.groupby(df['Fecha'].dt.date)['Tiempo Espera (min)'].mean()
-                    st.line_chart(df_tendencia)
-                    
-            with graf_der:
-                with st.container(border=True): 
-                    st.subheader("Distribución por Prioridad")
-                    df_prioridad = df['Código Prioridad'].value_counts()
-                    st.bar_chart(df_prioridad)
-
-            st.write("---")
-            st.subheader("🕒 Últimos 5 Traslados Registrados en la Nube")
-            
-            cols_recientes = ['ID Evento', 'Cédula', 'Código Prioridad', 'Motivo Traslado', 'Tiempo Total']
-            if 'Destino' in df.columns:
-                cols_recientes.append('Destino')
-                
-            df_recientes = df.tail(5)[cols_recientes].iloc[::-1]
-            st.dataframe(df_recientes, use_container_width=True)
-
-    except Exception as e:
-        st.error(f"⚠️ Error al leer los datos del Dashboard desde la nube: {e}")
+    if st.
