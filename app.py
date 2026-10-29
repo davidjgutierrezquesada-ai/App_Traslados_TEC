@@ -73,12 +73,17 @@ params = st.query_params
 url_cedula = params.get("cedula", "")
 url_categoria = params.get("categoria", "")
 
-
 if 'pantalla_actual' not in st.session_state:
     if url_cedula:
         st.session_state.pantalla_actual = 'Registro'
     else:
         st.session_state.pantalla_actual = 'Inicio'
+
+if 'limpiar_campos' in st.session_state and st.session_state.limpiar_campos:
+    st.session_state.in_alerta = ""
+    st.session_state.in_arribo = ""
+    st.session_state.in_salida = ""
+    st.session_state.limpiar_campos = False
 
 if 'in_alerta' not in st.session_state:
     st.session_state.in_alerta = ""
@@ -108,7 +113,6 @@ with st.sidebar:
         
     if st.button("Dashboard de KPIs", use_container_width=True):
         st.session_state.pantalla_actual = 'Dashboard'
-
 
 if st.session_state.pantalla_actual == 'Inicio':
     st.title("Sistema de Control de Traslados")
@@ -221,10 +225,7 @@ elif st.session_state.pantalla_actual == 'Registro':
                     df = pd.concat([df, pd.DataFrame([nuevo_registro])], ignore_index=True)
                     guardar_datos_traslados(df)
                     
-                    # Limpiamos las casillas para el siguiente registro
-                    st.session_state.in_alerta = ""
-                    st.session_state.in_arribo = ""
-                    st.session_state.in_salida = ""
+                    st.session_state.limpiar_campos = True
                     
                     st.query_params.clear()
                     
@@ -300,7 +301,7 @@ elif st.session_state.pantalla_actual == 'Dashboard':
                 st.success("¡Excelente! No hay traslados críticos recientes que superen los 30 minutos de espera.")
                 
             st.write("---")
-            
+          
             graf_izq, graf_der = st.columns([6, 4])
             
             with graf_izq:
